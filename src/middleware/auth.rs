@@ -1,11 +1,13 @@
 use rocket::{Request, Data};
 use rocket::fairing::{Fairing, Info, Kind};
+use rocket::http::Method;
+
 /// Handles authentication in the backend
 pub struct Auth;
 
 const NO_AUTH_ROUTES: [&str; 2] = [
     "/version",
-    "/user"
+    "/user/login"
 ];
 
 lazy_static! {
@@ -24,13 +26,13 @@ impl Fairing for Auth {
     }
     
     async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
-        if API_NO_AUTH.contains(&request.uri().to_string()) {
+        if API_NO_AUTH.contains(&request.uri().to_string()) || request.method() == Method::Options{
             return;
         }
         
-        match request.cookies().get("auth") {
+        match request.headers().get_one("auth"){
             None => println!("No auth present!"),
-            Some(auth_cookie) => println!("Cookie present with value {}", auth_cookie.value()) // todo! check cookie
+            Some(auth_value) => println!("Header auth present with value {}", auth_value) // todo! check value
         }
     }
 }
