@@ -1,14 +1,22 @@
 #[macro_use] extern crate rocket;
 #[macro_use] extern crate lazy_static;
+extern crate dotenv;
+
 mod api;
 mod catcher;
 mod middleware;
 
+use std::env;
+use dotenv::dotenv;
 use middleware::{cors, auth};
 use api::{version::version, user};
 
 #[launch]
 fn rocket() -> _ {
+    // Check dotenv
+    dotenv().ok();
+    env::var("TOKEN_AUTH_STRING").unwrap();
+    
     rocket::build()
     .attach(cors::CORS)
     .attach(auth::Auth)

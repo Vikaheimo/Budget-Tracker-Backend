@@ -9,7 +9,10 @@ pub enum LoginResponse {
     BadCredentials(Json<ErrorResponse>),
 
     #[response(status = 200, content_type = "json")]
-    Authenticated(Json<TokenResponse>)
+    Authenticated(Json<TokenResponse>),
+
+    #[response(status = 500, content_type = "json")]
+    ServerError(Json<ErrorResponse>),
 }
 
 #[derive(Debug, Serialize)]
