@@ -21,7 +21,7 @@ fn rocket() -> _ {
     .attach(cors::CORS)
     .attach(auth::Auth)
     .mount("/api/version", routes![version])
-    .mount("/api/user", routes![user::login])
+    .mount("/api/user", routes![user::login, user::sign_up])
     .mount("/", routes![all_options])
     .register("/",catchers![catcher::not_found])
 }

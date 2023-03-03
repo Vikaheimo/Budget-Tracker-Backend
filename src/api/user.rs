@@ -1,4 +1,4 @@
-use crate::api::helpers::responses::{ErrorResponse, LoginResponse, TokenResponse};
+use crate::api::helpers::responses::{ErrorResponse, LoginResponse, TokenResponse, SignUpResponse};
 use crate::api::helpers::token;
 use rocket::serde::json::Value;
 use rocket::serde::{json::Json, Deserialize, Serialize};
@@ -24,6 +24,19 @@ pub struct Claims {
     exp: u128,
 }
 
+#[derive(Default, Deserialize, Serialize)]
+pub struct SignupData {
+    username: String,
+    password: String,
+    email: String,
+}
+
+impl SignupData {
+    pub fn is_valid(&self) -> bool {
+        self.password.is_ascii()
+    }
+}
+
 lazy_static! {
     static ref KEY: Hmac<Sha256> =
         Hmac::new_from_slice(std::env::var("TOKEN_AUTH_STRING").unwrap().as_bytes()).unwrap();
@@ -36,6 +49,37 @@ pub fn login(login_details: Json<LoginInfo>) -> LoginResponse {
     // Dummy user
     let user_id = 123;
 
+    match generate_token(user_id) {
+        Ok(signed_token) => Authenticated(
+            TokenResponse::generate_message(signed_token.as_str())),
+        Err(_) => ServerError(ErrorResponse::generate_error("Error generating token")),
+    }
+}
+
+#[post("/logout")]
+pub fn logout(auth_token: token::Token<'_>) {
+    // Todo remove authentication token
+}
+
+#[post("/signup", data = "<signup_details>")]
+pub fn sign_up(signup_details: Json<SignupData>) -> SignUpResponse {
+    use SignUpResponse::*;
+
+    if !signup_details.is_valid() {
+        return BadSignUpDetails(
+            ErrorResponse::generate_error("Password contains non-valid ascii characters"));
+    }
+
+    // Dummy id
+    let user_id = 123;
+    match generate_token(user_id) {
+        Ok(signed_token) => Success(
+            TokenResponse::generate_message(signed_token.as_str())),
+        Err(_) => ServerError(ErrorResponse::generate_error("Error generating token")),
+    }
+}
+
+fn generate_token(user_id: usize) -> Result<jwt::Token<jwt::Header, Claims, jwt::token::Signed>, jwt::Error>{
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -48,17 +92,5 @@ pub fn login(login_details: Json<LoginInfo>) -> LoginResponse {
         exp: expires,
     };
 
-    let unsigned_token = Token::new(header, claims);
-    let signed_token = match unsigned_token.sign_with_key(&*KEY) {
-        Ok(value) => value,
-        Err(_) => return ServerError(ErrorResponse::generate_error("Error generating token")),
-    };
-
-    Authenticated(TokenResponse::generate_message(signed_token.as_str()))
+    return Token::new(header, claims).sign_with_key(&*KEY)
 }
-
-#[post("/logout")]
-pub fn logout(auth_token: token::Token<'_>) {
-    // Todo remove authentication token
-}
-

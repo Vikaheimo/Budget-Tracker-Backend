@@ -35,3 +35,15 @@ impl TokenResponse {
         Json(TokenResponse { token: token.to_string() })
     }
 }
+
+#[derive(Debug, Responder)]
+pub enum SignUpResponse {    
+    #[response(status = 400, content_type = "json")]
+    BadSignUpDetails(Json<ErrorResponse>),
+
+    #[response(status = 200, content_type = "json")]
+    Success(Json<TokenResponse>),
+
+    #[response(status = 500, content_type = "json")]
+    ServerError(Json<ErrorResponse>),
+}
