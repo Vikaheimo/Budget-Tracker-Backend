@@ -2,9 +2,6 @@ use rocket::serde::{json::Json, Serialize};
 
 #[derive(Debug, Responder)]
 pub enum LoginResponse {
-    #[response(status = 400, content_type = "json")]
-    AlreadyAuthenticated(Json<ErrorResponse>),
-    
     #[response(status = 403, content_type = "json")]
     BadCredentials(Json<ErrorResponse>),
 

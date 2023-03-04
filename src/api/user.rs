@@ -1,8 +1,7 @@
 use crate::api::helpers::responses::{ErrorResponse, LoginResponse, TokenResponse, SignUpResponse};
-use crate::api::helpers::token;
 use rocket::serde::{json::Json, Deserialize, Serialize};
 use crate::models::{user, self};
-use crate::database;
+use crate::database::{self, DatabaseError};
 use crate::helpers::hash;
 
 
@@ -23,7 +22,7 @@ pub struct LoginInfo {
 
 #[derive(Default, Deserialize, Serialize)]
 pub struct Claims {
-    sub: usize,
+    sub: u64,
     exp: u128,
 }
 
@@ -49,20 +48,29 @@ lazy_static! {
 #[post("/login", data = "<login_details>")]
 pub fn login(login_details: Json<LoginInfo>) -> LoginResponse {
     use LoginResponse::*;
-    // Check authentication!
-    // Dummy user
-    let user_id = 123;
+
+    // Get user details
+    let user = match database::users::get_user_by_username(&login_details.username) {
+        Ok(value) => value,
+        Err(DatabaseError::DoesNotExist) => 
+            return BadCredentials(ErrorResponse::generate_error("Invalid credentials")),
+        Err(_) => 
+            return ServerError(ErrorResponse::generate_error("Error connecting to the database")),
+    };
+    let user::User {id: user_id, password: password_hash, ..} = user;
+
+    // Check authentication
+    match hash::is_same_password_as_hash(&login_details.password, password_hash) {
+        Err(_) => return ServerError(ErrorResponse::generate_error("Password hashing failed")),
+        Ok(false) => return BadCredentials(ErrorResponse::generate_error("Invalid credentials")),
+        Ok(true) => (),
+    }
 
     match generate_token(user_id) {
         Ok(signed_token) => Authenticated(
             TokenResponse::generate_message(signed_token.as_str())),
         Err(_) => ServerError(ErrorResponse::generate_error("Error generating token")),
     }
-}
-
-#[post("/logout")]
-pub fn logout(auth_token: token::Token<'_>) {
-    // Todo remove authentication token
 }
 
 #[post("/signup", data = "<signup_details>")]
@@ -103,7 +111,7 @@ pub fn sign_up(signup_details: Json<SignupData>) -> SignUpResponse {
     }
 }
 
-fn generate_token(user_id: usize) -> Result<jwt::Token<jwt::Header, Claims, jwt::token::Signed>, jwt::Error>{
+fn generate_token(user_id: u64) -> Result<jwt::Token<jwt::Header, Claims, jwt::token::Signed>, jwt::Error>{
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

@@ -1,4 +1,4 @@
-use std::env;
+//! This file hash database models for user
 
 use crate::schema::users;
 use diesel::prelude::*;

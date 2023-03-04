@@ -1,3 +1,4 @@
+//! This file handles auth using request Guards
 use rocket::http::Status;
 use rocket::request::{Outcome, Request, FromRequest};
 
