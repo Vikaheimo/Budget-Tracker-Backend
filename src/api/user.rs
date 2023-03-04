@@ -1,7 +1,10 @@
 use crate::api::helpers::responses::{ErrorResponse, LoginResponse, TokenResponse, SignUpResponse};
 use crate::api::helpers::token;
-use rocket::serde::json::Value;
 use rocket::serde::{json::Json, Deserialize, Serialize};
+use crate::models::{user, self};
+use crate::database;
+use crate::helpers::hash;
+
 
 use hmac::{Hmac, Mac};
 use jwt::{Header, SignWithKey, Token};
@@ -24,7 +27,7 @@ pub struct Claims {
     exp: u128,
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize, Clone)]
 pub struct SignupData {
     username: String,
     password: String,
@@ -32,8 +35,9 @@ pub struct SignupData {
 }
 
 impl SignupData {
+    /// Check if password contains valid ASCII and email has an '@'
     pub fn is_valid(&self) -> bool {
-        self.password.is_ascii()
+        self.password.is_ascii() && self.email.contains("@")
     }
 }
 
@@ -67,7 +71,27 @@ pub fn sign_up(signup_details: Json<SignupData>) -> SignUpResponse {
 
     if !signup_details.is_valid() {
         return BadSignUpDetails(
-            ErrorResponse::generate_error("Password contains non-valid ascii characters"));
+            ErrorResponse::generate_error("Sign Up details are malformed"));
+    }
+
+    // Hash the password
+    let hashed_password = match hash::hash_password(&signup_details.password){
+        Ok(value) => value,
+        Err(_) => return ServerError(ErrorResponse::generate_error("Password hashing failed"))
+    };
+
+    let new_user = models::user::NewUser {
+        username: signup_details.username.as_str(),
+        password: hashed_password.as_str(),
+        email: signup_details.email.as_str(),
+    };
+
+    match database::users::create_user(new_user) {
+        Ok(_) => (),
+        Err(database::DatabaseError::AlreadyExists) => 
+            return ServerError(ErrorResponse::generate_error("Username is already in use")),
+        Err(_) => 
+            return ServerError(ErrorResponse::generate_error("Error connecting to the database")),
     }
 
     // Dummy id
