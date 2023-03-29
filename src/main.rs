@@ -21,6 +21,9 @@ fn rocket() -> _ {
     env::var("TOKEN_AUTH_STRING").unwrap();
     env::var("PASSWORD_PEPPER").unwrap();
 
+    // Check that the max password length can be hashed
+    let _test_hash = helpers::hash::hash_password(&"p".repeat(user::PASSWORD_MAX_CHAR_LENGTH), &env::var("PASSWORD_PEPPER").unwrap());
+
     // Check database for connection
     database::connect::establish_connection();
     

@@ -29,6 +29,7 @@ impl<'r> FromRequest<'r> for Token<'r> {
         }
     }
 }
+
 fn get_token_validty_and_subject(token: String, key: &Hmac<Sha256>) -> Result<String, TokenError> {
     let claims: BTreeMap<String, u128> = match token.verify_with_key(key) {
         Err(_) => return Err(TokenError::BadToken),
@@ -84,7 +85,7 @@ mod tests {
         let token_string = "eyJhbGciOiJIUzI1NiJ9.ayJzdWIiOjk1OTgyMTg5MSwiZXhwIjoxNjgwMDkzNDcyMjE4fQ.yBwc39EoSv2RS-Fa0chVEpqOpssNidJ6RkA8sdbs1j4".to_owned();
         assert_eq!(get_token_validty_and_subject(token_string, &*KEY), Err(TokenError::BadToken))
     }
-    
+
     #[test]
     fn check_expired_token() {
         let user_id = 12312321;

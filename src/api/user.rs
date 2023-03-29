@@ -12,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const MS_IN_HOUR: u128 = 60 * 60 * 1000;
 const AUTH_TIME_AS_MILLIS: u128 = MS_IN_HOUR;
+pub const PASSWORD_MAX_CHAR_LENGTH: usize = 50;
 
 #[derive(Deserialize, Debug)]
 #[serde(crate = "rocket::serde")]
@@ -34,9 +35,26 @@ pub struct SignupData {
 }
 
 impl SignupData {
-    /// Check if password contains valid ASCII and email has an '@'
-    pub fn is_valid(&self) -> bool {
-        self.password.is_ascii() && self.email.contains("@")
+    /// Check if password contains valid ASCII and email has an '@' and that password isn't too long
+    pub fn check_signup_validity(&self) -> Result<(), crate::api::helpers::responses::SignUpResponse> {
+        let helper: String;
+        use crate::api::helpers::responses;
+        let error_text = if !self.password.is_ascii() {
+            "Password can't contain non ASCII characters!"
+            
+        } else if self.password.len() > PASSWORD_MAX_CHAR_LENGTH {
+            helper = format!("Password can't be longer than {} characters!", PASSWORD_MAX_CHAR_LENGTH);
+            helper.as_str()
+
+        } else if self.email.contains("@"){
+            "Email is invalid!"
+
+        } else {
+            return Ok(());
+        };
+        Err(responses::SignUpResponse::BadSignUpDetails(
+            responses::ErrorResponse::generate_error(error_text)
+        ))
     }
 }
 
@@ -60,7 +78,7 @@ pub fn login(login_details: Json<LoginInfo>) -> LoginResponse {
     let user::User {user_id, password: password_hash, ..} = user;
 
     // Check authentication
-    match hash::is_same_password_as_hash(&login_details.password, password_hash) {
+    match hash::is_same_password_as_hash(&login_details.password, password_hash, &*hash::PEPPER) {
         Err(_) => return ServerError(ErrorResponse::generate_error("Password hashing failed")),
         Ok(false) => return BadCredentials(ErrorResponse::generate_error("Invalid credentials")),
         Ok(true) => (),
@@ -77,13 +95,13 @@ pub fn login(login_details: Json<LoginInfo>) -> LoginResponse {
 pub fn sign_up(signup_details: Json<SignupData>) -> SignUpResponse {
     use SignUpResponse::*;
 
-    if !signup_details.is_valid() {
-        return BadSignUpDetails(
-            ErrorResponse::generate_error("Sign Up details are malformed"));
-    }
+    match signup_details.check_signup_validity() {
+        Ok(_) => (),
+        Err(value) => return value,
+    };
 
     // Hash the password
-    let hashed_password = match hash::hash_password(&signup_details.password){
+    let hashed_password = match hash::hash_password(&signup_details.password, &hash::PEPPER){
         Ok(value) => value,
         Err(_) => return ServerError(ErrorResponse::generate_error("Password hashing failed"))
     };
@@ -144,5 +162,7 @@ mod tests {
         let token_str = binding.as_str();
 
         let claims: BTreeMap<String, u128> = token_str.verify_with_key(&key).unwrap();
+
+        assert_eq!(claims["sub"], user_id as u128)
     }
 }
