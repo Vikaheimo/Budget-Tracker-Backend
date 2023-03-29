@@ -22,8 +22,8 @@ pub struct LoginInfo {
 
 #[derive(Default, Deserialize, Serialize)]
 pub struct Claims {
-    sub: u64,
-    exp: u128,
+    pub sub: u64,
+    pub exp: u128,
 }
 
 #[derive(Default, Deserialize, Serialize, Clone)]
@@ -41,7 +41,7 @@ impl SignupData {
 }
 
 lazy_static! {
-    static ref KEY: Hmac<Sha256> =
+    pub static ref KEY: Hmac<Sha256> =
         Hmac::new_from_slice(std::env::var("TOKEN_AUTH_STRING").unwrap().as_bytes()).unwrap();
 }
 
@@ -66,7 +66,7 @@ pub fn login(login_details: Json<LoginInfo>) -> LoginResponse {
         Ok(true) => (),
     }
 
-    match generate_token(user_id as u64) {
+    match generate_token(user_id as u64, &*KEY) {
         Ok(signed_token) => Authenticated(
             TokenResponse::generate_message(signed_token.as_str())),
         Err(_) => ServerError(ErrorResponse::generate_error("Error generating token")),
@@ -104,14 +104,14 @@ pub fn sign_up(signup_details: Json<SignupData>) -> SignUpResponse {
             return ServerError(ErrorResponse::generate_error("Error connecting to the database")),
     }
 
-    match generate_token(user_id as u64) {
+    match generate_token(user_id as u64, &*KEY) {
         Ok(signed_token) => Success(
             TokenResponse::generate_message(signed_token.as_str())),
         Err(_) => ServerError(ErrorResponse::generate_error("Error generating token")),
     }
 }
 
-fn generate_token(user_id: u64) -> Result<jwt::Token<jwt::Header, Claims, jwt::token::Signed>, jwt::Error>{
+pub fn generate_token(user_id: u64, key: &Hmac<Sha256>) -> Result<jwt::Token<jwt::Header, Claims, jwt::token::Signed>, jwt::Error>{
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -124,5 +124,25 @@ fn generate_token(user_id: u64) -> Result<jwt::Token<jwt::Header, Claims, jwt::t
         exp: expires,
     };
 
-    return Token::new(header, claims).sign_with_key(&*KEY)
+    return Token::new(header, claims).sign_with_key(key)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+    use super::generate_token;
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    use jwt::{self, VerifyWithKey};
+
+    #[test]
+    fn token_can_be_unsigned_with_same_key() {
+        let user_id = 959821891;
+        let key: Hmac<Sha256> = Hmac::new_from_slice(b"ASDkjj312").unwrap();
+
+        let binding = generate_token(user_id, &key).unwrap();
+        let token_str = binding.as_str();
+
+        let claims: BTreeMap<String, u128> = token_str.verify_with_key(&key).unwrap();
+    }
 }
