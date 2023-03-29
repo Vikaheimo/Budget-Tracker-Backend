@@ -13,13 +13,13 @@ pub fn create_user(new_user: NewUser) -> Result<u64, DatabaseError> {
         Err(error) if error == DatabaseError::DoesNotExist => (),
         Err(_) => return Err(DatabaseError::ConnectionFailed),
     }
-
+    
     // Generate the user
     let mut connection = connect::establish_connection();
      match diesel::insert_into(users).values(&new_user).execute(&mut connection) {
         Ok(_) => (),
         Err(_) => return Err(DatabaseError::ConnectionFailed),
-     }
+    }
 
     // Get the user id to handle auth later
     let user = get_user_by_username(&new_user.username)?;

@@ -3,7 +3,7 @@ use rocket::serde::{json::Json, Deserialize, Serialize};
 use crate::models::{user, self};
 use crate::database::{self, DatabaseError};
 use crate::helpers::hash;
-
+use crate::helpers::user_id_generator;
 
 use hmac::{Hmac, Mac};
 use jwt::{Header, SignWithKey, Token};
@@ -57,7 +57,7 @@ pub fn login(login_details: Json<LoginInfo>) -> LoginResponse {
         Err(_) => 
             return ServerError(ErrorResponse::generate_error("Error connecting to the database")),
     };
-    let user::User {id: user_id, password: password_hash, ..} = user;
+    let user::User {user_id, password: password_hash, ..} = user;
 
     // Check authentication
     match hash::is_same_password_as_hash(&login_details.password, password_hash) {
@@ -66,7 +66,7 @@ pub fn login(login_details: Json<LoginInfo>) -> LoginResponse {
         Ok(true) => (),
     }
 
-    match generate_token(user_id) {
+    match generate_token(user_id as u64) {
         Ok(signed_token) => Authenticated(
             TokenResponse::generate_message(signed_token.as_str())),
         Err(_) => ServerError(ErrorResponse::generate_error("Error generating token")),
@@ -87,11 +87,13 @@ pub fn sign_up(signup_details: Json<SignupData>) -> SignUpResponse {
         Ok(value) => value,
         Err(_) => return ServerError(ErrorResponse::generate_error("Password hashing failed"))
     };
+    let user_id = user_id_generator::generate_random_id();
 
     let new_user = models::user::NewUser {
         username: signup_details.username.as_str(),
         password: hashed_password.as_str(),
         email: signup_details.email.as_str(),
+        user_id: user_id,
     };
 
     match database::users::create_user(new_user) {
@@ -102,9 +104,7 @@ pub fn sign_up(signup_details: Json<SignupData>) -> SignUpResponse {
             return ServerError(ErrorResponse::generate_error("Error connecting to the database")),
     }
 
-    // Dummy id
-    let user_id = 123;
-    match generate_token(user_id) {
+    match generate_token(user_id as u64) {
         Ok(signed_token) => Success(
             TokenResponse::generate_message(signed_token.as_str())),
         Err(_) => ServerError(ErrorResponse::generate_error("Error generating token")),
